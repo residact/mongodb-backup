@@ -1,8 +1,7 @@
-# Utiliser une image de base avec MongoDB tools
-FROM mongo:latest
+FROM alpine:3.14
 
-# Installer cron
-RUN apt-get update && apt-get install -y cron
+# Installer MongoDB tools, cron et les dépendances nécessaires
+RUN apk add --no-cache mongodb-tools tzdata dcron ca-certificates
 
 # Définir les variables d'environnement
 ENV MONGO_URI=""
@@ -16,19 +15,17 @@ RUN chmod +x /usr/local/bin/backup.sh
 RUN mkdir -p ${ARCHIVE_PATH}
 
 # Configurer cron
-RUN echo "0 0 * * * root MONGO_URI=${MONGO_URI} ARCHIVE_PATH=${ARCHIVE_PATH} /usr/local/bin/backup.sh >> /var/log/cron.log 2>&1" > /etc/cron.d/mongodb-backup
-RUN chmod 0644 /etc/cron.d/mongodb-backup
+RUN echo "0 0 * * * MONGO_URI=${MONGO_URI} ARCHIVE_PATH=${ARCHIVE_PATH} /usr/local/bin/backup.sh >> /var/log/cron.log 2>&1" > /etc/crontabs/root
 
 # Créer les fichiers de log
 RUN touch /var/log/cron.log /var/log/backup.log && \
     chmod 0666 /var/log/cron.log /var/log/backup.log
 
 # Script pour démarrer cron et garder le conteneur en cours d'exécution
-RUN echo '#!/bin/bash' > /usr/local/bin/docker-entrypoint.sh && \
+RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh && \
     echo 'printenv | grep -v "PATH" > /etc/environment' >> /usr/local/bin/docker-entrypoint.sh && \
-    echo 'cron' >> /usr/local/bin/docker-entrypoint.sh && \
-    echo 'tail -f /var/log/cron.log' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'crond -f -d 8' >> /usr/local/bin/docker-entrypoint.sh && \
     chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Commande pour exécuter au démarrage du conteneur
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/docker-entrypoint.sh"]
